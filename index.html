@@ -1086,7 +1086,7 @@ function showExplanation(note, index) {
 
 // API config
 const isLocal = ['localhost','127.0.0.1'].includes(location.hostname);
-const API_BASE = isLocal ? 'http://localhost:5085' : `${location.protocol}//${location.hostname}:5085`;
+const API_BASE = isLocal ? 'http://localhost:5085' : `${location.origin}/digitacio`;
 
 let allVoices = [];
 let currentVoice = 0;

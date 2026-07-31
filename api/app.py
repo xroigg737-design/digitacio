@@ -20,18 +20,19 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-AUDIVERIS_JAR = os.environ.get('AUDIVERIS_JAR', '/opt/audiveris/build/libs/audiveris.jar')
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
 
+AUDIVERIS_PATHS = [
+    '/opt/audiveris/bin/Audiveris',
+    '/usr/bin/audiveris',
+    '/usr/local/bin/audiveris',
+]
+
 def find_audiveris():
-    jar = AUDIVERIS_JAR
-    if os.path.exists(jar):
-        return jar
-    for path in [
-        '/opt/audiveris/build/libs/audiveris.jar',
-        '/opt/audiveris/audiveris.jar',
-        os.path.expanduser('~/audiveris/build/libs/audiveris.jar'),
-    ]:
+    custom = os.environ.get('AUDIVERIS_BIN')
+    if custom and os.path.exists(custom):
+        return custom
+    for path in AUDIVERIS_PATHS:
         if os.path.exists(path):
             return path
     return None
@@ -46,8 +47,8 @@ def ocr():
     if not file.filename.lower().endswith('.pdf'):
         return jsonify({'error': 'Nomes es suporten fitxers PDF'}), 400
 
-    jar = find_audiveris()
-    if not jar:
+    audiveris_bin = find_audiveris()
+    if not audiveris_bin:
         return jsonify({'error': 'Audiveris no esta instal·lat al servidor. Executa setup.sh primer.'}), 503
 
     tmpdir = tempfile.mkdtemp(prefix='digitacio_ocr_')
@@ -63,9 +64,7 @@ def ocr():
 
         cmd = [
             'xvfb-run', '-a',
-            'java', '-Xmx2g',
-            '-cp', jar,
-            'Audiveris',
+            audiveris_bin,
             '-batch',
             '-export',
             '-output', output_dir,
