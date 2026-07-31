@@ -211,6 +211,8 @@ def render_pdf():
     tmpdir = tempfile.mkdtemp(prefix='digitacio_render_')
     try:
         tk = verovio.toolkit()
+        resource_path = os.path.join(os.path.dirname(verovio.__file__), 'data')
+        tk.setResourcePath(resource_path)
         tk.setOptions(json.dumps({
             'pageWidth': 2100,
             'pageHeight': 2970,
