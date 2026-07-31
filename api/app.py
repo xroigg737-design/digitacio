@@ -151,7 +151,7 @@ def ocr():
             cmd,
             capture_output=True,
             text=True,
-            timeout=180,
+            timeout=300,
             cwd=tmpdir,
         )
 
@@ -187,7 +187,7 @@ def ocr():
         return jsonify({'musicxml': musicxml, 'source': 'audiveris'})
 
     except subprocess.TimeoutExpired:
-        return jsonify({'error': 'El processament ha trigat massa (timeout 3 min)'}), 504
+        return jsonify({'error': 'El processament ha trigat massa (timeout 5 min). Prova amb un PDF mes senzill o menys pagines.'}), 504
     except Exception as e:
         return jsonify({'error': f'Error intern: {str(e)}'}), 500
     finally:

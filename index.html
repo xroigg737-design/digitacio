@@ -1298,7 +1298,7 @@ function readFile(file) {
 async function uploadPdfForOcr(file) {
     showLoading(
         'Processant OCR de la partitura...',
-        'Audiveris esta reconeixent les notes del PDF. Pot trigar 1-2 minuts.'
+        'Audiveris esta reconeixent les notes del PDF. Pot trigar fins a 5 minuts.'
     );
     try {
         const formData = new FormData();
@@ -1307,6 +1307,7 @@ async function uploadPdfForOcr(file) {
         const resp = await fetch(`${API_BASE}/api/ocr`, {
             method: 'POST',
             body: formData,
+            signal: AbortSignal.timeout(360000),
         });
 
         const data = await resp.json();
