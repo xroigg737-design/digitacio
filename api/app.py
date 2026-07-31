@@ -3,7 +3,8 @@
 Digitació API - Backend per OCR de partitures i renderitzat PDF amb digitació.
 
 Endpoints:
-  POST /api/ocr       - PDF partitura → MusicXML (via Audiveris)
+  POST /api/fingering  - MusicXML → MusicXML amb digitació (via pianoplayer)
+  POST /api/ocr        - PDF partitura → MusicXML (via Audiveris)
   POST /api/render-pdf - MusicXML amb digitació → PDF (via Verovio)
 """
 
@@ -36,6 +37,81 @@ def find_audiveris():
         if os.path.exists(path):
             return path
     return None
+
+
+HAND_SIZE_MAP = {
+    'xxs': 'XXS', 'xs': 'XS', 's': 'S', 'm': 'M',
+    'l': 'L', 'xl': 'XL', 'xxl': 'XXL',
+}
+
+
+@app.route('/api/fingering', methods=['POST'])
+def fingering():
+    """Genera digitació amb pianoplayer (motor biomecànic validat)."""
+    try:
+        from pianoplayer.core import run_annotate
+    except ImportError:
+        return jsonify({'error': 'pianoplayer no instal·lat. pip install pianoplayer'}), 503
+
+    data = request.get_json()
+    if not data or 'musicxml' not in data:
+        return jsonify({'error': 'Cal enviar musicxml al body JSON'}), 400
+
+    musicxml = data['musicxml']
+    hand_size = HAND_SIZE_MAP.get(data.get('hand_size', 'm').lower(), 'M')
+    right_only = data.get('right_only', False)
+    left_only = data.get('left_only', False)
+
+    tmpdir = tempfile.mkdtemp(prefix='digitacio_finger_')
+    try:
+        input_path = os.path.join(tmpdir, 'input.musicxml')
+        output_path = os.path.join(tmpdir, 'output.musicxml')
+
+        with open(input_path, 'w', encoding='utf-8') as f:
+            f.write(musicxml)
+
+        run_annotate(
+            input_path,
+            outputfile=output_path,
+            hand_size=hand_size,
+            right_only=right_only,
+            left_only=left_only,
+            quiet=True,
+        )
+
+        with open(output_path, 'r', encoding='utf-8') as f:
+            result_xml = f.read()
+
+        import xml.etree.ElementTree as ET
+        tree = ET.parse(output_path)
+        fingerings = []
+        for note in tree.iter('note'):
+            pitch = note.find('pitch')
+            if pitch is None:
+                continue
+            step = pitch.find('step').text
+            octave = pitch.find('octave').text
+            alter_el = pitch.find('alter')
+            alter = int(alter_el.text) if alter_el is not None else 0
+            fing_el = note.find('.//fingering')
+            finger = int(fing_el.text) if fing_el is not None else None
+            fingerings.append({
+                'note': f"{step}{octave}",
+                'finger': finger,
+                'alter': alter,
+            })
+
+        return jsonify({
+            'musicxml': result_xml,
+            'fingerings': fingerings,
+            'hand_size': hand_size,
+            'engine': 'pianoplayer-3.0.2',
+        })
+
+    except Exception as e:
+        return jsonify({'error': f'Error generant digitació: {str(e)}'}), 500
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 @app.route('/api/ocr', methods=['POST'])
@@ -214,9 +290,15 @@ def health():
         cairosvg_ok = True
     except ImportError:
         cairosvg_ok = False
+    try:
+        import pianoplayer
+        pianoplayer_ok = True
+    except ImportError:
+        pianoplayer_ok = False
 
     return jsonify({
         'status': 'ok',
+        'pianoplayer': pianoplayer_ok,
         'audiveris': audiveris_ok,
         'verovio': verovio_ok,
         'cairosvg': cairosvg_ok,

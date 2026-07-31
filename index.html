@@ -685,7 +685,7 @@
 
 <footer>
     Digitacio &middot; Apps XRoig &middot; 2026
-    <p class="footer-version">v0.2</p>
+    <p class="footer-version">v0.3</p>
 </footer>
 
 <script>
@@ -1091,6 +1091,8 @@ const API_BASE = isLocal ? 'http://localhost:5085' : `${location.origin}/digitac
 let allVoices = [];
 let currentVoice = 0;
 let originalMusicXML = '';
+let apiAvailable = false;
+let fingeringEngine = 'local';
 
 function showLoading(text, sub) {
     document.getElementById('loadingText').textContent = text || 'Processant...';
@@ -1162,22 +1164,83 @@ function injectFingeringIntoMusicXML(xmlStr, voices) {
     return serializer.serializeToString(doc);
 }
 
-function processFile(xmlStr, fileName) {
+async function requestPianoplayerFingering(xmlStr, handSize) {
+    const resp = await fetch(`${API_BASE}/api/fingering`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ musicxml: xmlStr, hand_size: handSize }),
+    });
+    if (!resp.ok) {
+        const err = await resp.json();
+        throw new Error(err.error || 'Error al servidor');
+    }
+    return resp.json();
+}
+
+async function processFile(xmlStr, fileName) {
     originalMusicXML = xmlStr;
-    allVoices = parseMusicXML(xmlStr);
+
+    const handSize = document.getElementById('handSize').value;
+
+    // Intentar pianoplayer (servidor) primer, fallback a motor local
+    let usedPianoplayer = false;
+    if (apiAvailable) {
+        try {
+            showLoading('Generant digitacio amb pianoplayer...', 'Motor biomecanic validat amb mida de ma ' + handSize.toUpperCase());
+            const ppResult = await requestPianoplayerFingering(xmlStr, handSize);
+            // Parsejar el MusicXML anotat per pianoplayer
+            originalMusicXML = ppResult.musicxml;
+            allVoices = parseMusicXML(ppResult.musicxml);
+            // Extreure digitacions del MusicXML anotat
+            const annotatedDoc = new DOMParser().parseFromString(ppResult.musicxml, 'text/xml');
+            allVoices.forEach(v => {
+                let fi = 0;
+                const ppFingerings = ppResult.fingerings || [];
+                v.notes.forEach(n => {
+                    if (n.type !== 'note' || n.chord) return;
+                    // Buscar la digitació corresponent
+                    while (fi < ppFingerings.length && ppFingerings[fi].finger === null) fi++;
+                    if (fi < ppFingerings.length && ppFingerings[fi].finger) {
+                        n.finger = ppFingerings[fi].finger;
+                        n.reasons = explainFingering(null, n, null, n.finger, null, v.hand, handSize);
+                    }
+                    fi++;
+                });
+                // Re-generar explicacions amb context
+                const melodic = v.notes.filter(n => n.type === 'note' && !n.chord);
+                melodic.forEach((n, i) => {
+                    n.reasons = explainFingering(
+                        i > 0 ? melodic[i-1] : null, n,
+                        i < melodic.length-1 ? melodic[i+1] : null,
+                        n.finger, i > 0 ? melodic[i-1].finger : null,
+                        v.hand, handSize
+                    );
+                });
+            });
+            fingeringEngine = 'pianoplayer';
+            usedPianoplayer = true;
+        } catch (err) {
+            console.warn('pianoplayer error, usant motor local:', err.message);
+        } finally {
+            hideLoading();
+        }
+    }
+
+    if (!usedPianoplayer) {
+        allVoices = parseMusicXML(xmlStr);
+        allVoices.forEach(v => computeFingering(v.notes, v.hand, handSize));
+        fingeringEngine = 'local';
+    }
+
     if (allVoices.length === 0) {
         alert('No s\'han trobat notes al fitxer.');
         return;
     }
 
-    const handSize = document.getElementById('handSize').value;
-    allVoices.forEach(v => {
-        computeFingering(v.notes, v.hand, handSize);
-    });
-
+    const engineLabel = fingeringEngine === 'pianoplayer' ? ' · pianoplayer' : ' · motor local';
     document.getElementById('fileName').textContent = fileName;
     const totalNotes = allVoices.reduce((s, v) => s + v.notes.filter(n => n.type === 'note').length, 0);
-    document.getElementById('fileStats').textContent = `${totalNotes} notes · ${allVoices.length} veu${allVoices.length > 1 ? 's' : ''}`;
+    document.getElementById('fileStats').textContent = `${totalNotes} notes · ${allVoices.length} veu${allVoices.length > 1 ? 's' : ''}${engineLabel}`;
 
     const tabs = document.getElementById('handTabs');
     tabs.innerHTML = '';
@@ -1267,12 +1330,49 @@ document.getElementById('closeBtn').addEventListener('click', () => {
     allVoices = [];
 });
 
-document.getElementById('handSize').addEventListener('change', () => {
+document.getElementById('handSize').addEventListener('change', async () => {
     const hs = document.getElementById('handSize').value;
     const spans = HAND_SPANS[hs];
     document.getElementById('spanDisplay').textContent = `Extensio max 1-5: ${spans.max15} semitons`;
-    if (allVoices.length > 0) {
-        allVoices.forEach(v => computeFingering(v.notes, v.hand, hs));
+    if (allVoices.length > 0 && originalMusicXML) {
+        if (apiAvailable) {
+            try {
+                showLoading('Re-calculant digitacio...', 'Mida de ma: ' + hs.toUpperCase());
+                const ppResult = await requestPianoplayerFingering(originalMusicXML, hs);
+                allVoices = parseMusicXML(ppResult.musicxml);
+                const ppFingerings = ppResult.fingerings || [];
+                allVoices.forEach(v => {
+                    let fi = 0;
+                    v.notes.forEach(n => {
+                        if (n.type !== 'note' || n.chord) return;
+                        while (fi < ppFingerings.length && ppFingerings[fi].finger === null) fi++;
+                        if (fi < ppFingerings.length && ppFingerings[fi].finger) {
+                            n.finger = ppFingerings[fi].finger;
+                        }
+                        fi++;
+                    });
+                    const melodic = v.notes.filter(n => n.type === 'note' && !n.chord);
+                    melodic.forEach((n, i) => {
+                        n.reasons = explainFingering(
+                            i > 0 ? melodic[i-1] : null, n,
+                            i < melodic.length-1 ? melodic[i+1] : null,
+                            n.finger, i > 0 ? melodic[i-1].finger : null,
+                            v.hand, hs
+                        );
+                    });
+                });
+                fingeringEngine = 'pianoplayer';
+            } catch (err) {
+                console.warn('pianoplayer error en canvi mida:', err.message);
+                allVoices.forEach(v => computeFingering(v.notes, v.hand, hs));
+                fingeringEngine = 'local';
+            } finally {
+                hideLoading();
+            }
+        } else {
+            allVoices.forEach(v => computeFingering(v.notes, v.hand, hs));
+            fingeringEngine = 'local';
+        }
         renderScore(allVoices[currentVoice]);
         document.getElementById('explanation').classList.remove('visible');
     }
@@ -1377,11 +1477,14 @@ async function checkApiStatus() {
         const resp = await fetch(`${API_BASE}/api/health`, { signal: AbortSignal.timeout(3000) });
         const data = await resp.json();
         const parts = [];
+        if (data.pianoplayer) { parts.push('pianoplayer'); apiAvailable = true; fingeringEngine = 'pianoplayer'; }
         if (data.audiveris) parts.push('OCR');
         if (data.verovio) parts.push('PDF');
         el.innerHTML = `<span class="api-dot ok"></span>API: ${parts.join(' + ') || 'connectat'}`;
     } catch {
-        el.innerHTML = `<span class="api-dot off"></span>API offline (PDF i OCR no disponibles)`;
+        apiAvailable = false;
+        fingeringEngine = 'local';
+        el.innerHTML = `<span class="api-dot off"></span>API offline · motor local actiu`;
     }
 }
 checkApiStatus();
