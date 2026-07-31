@@ -1188,23 +1188,36 @@ async function processFile(xmlStr, fileName) {
         try {
             showLoading('Generant digitacio amb pianoplayer...', 'Motor biomecanic validat amb mida de ma ' + handSize.toUpperCase());
             const ppResult = await requestPianoplayerFingering(xmlStr, handSize);
-            // Parsejar el MusicXML anotat per pianoplayer
-            originalMusicXML = ppResult.musicxml;
-            allVoices = parseMusicXML(ppResult.musicxml);
-            // Extreure digitacions del MusicXML anotat
-            const annotatedDoc = new DOMParser().parseFromString(ppResult.musicxml, 'text/xml');
+            // Parsejar l'original (NO el de pianoplayer, que pot perdre estructura)
+            allVoices = parseMusicXML(xmlStr);
+            // Extreure digitacions del MusicXML anotat per pianoplayer
+            const ppDoc = new DOMParser().parseFromString(ppResult.musicxml, 'text/xml');
+            const ppNotes = ppDoc.querySelectorAll('note');
+            const ppFingerMap = [];
+            ppNotes.forEach(pn => {
+                const pitch = pn.querySelector('pitch');
+                if (!pitch) return;
+                const fing = pn.querySelector('fingering');
+                if (!fing) return;
+                const step = pitch.querySelector('step')?.textContent || '';
+                const octave = pitch.querySelector('octave')?.textContent || '';
+                const alter = pitch.querySelector('alter')?.textContent || '0';
+                const voice = pn.querySelector('voice')?.textContent || '1';
+                const staff = pn.querySelector('staff')?.textContent || '1';
+                ppFingerMap.push({ step, octave, alter, voice, staff, finger: parseInt(fing.textContent) });
+            });
+            // Assignar fingerings per ordre seqüencial dins de cada staff/voice
+            const ppCounters = {};
             allVoices.forEach(v => {
-                let fi = 0;
-                const ppFingerings = ppResult.fingerings || [];
+                const key = `${v.staff}-${v.voice}`;
+                if (!ppCounters[key]) ppCounters[key] = 0;
+                const matching = ppFingerMap.filter(p => p.staff === String(v.staff) && p.voice === String(v.voice));
                 v.notes.forEach(n => {
                     if (n.type !== 'note' || n.chord) return;
-                    // Buscar la digitació corresponent
-                    while (fi < ppFingerings.length && ppFingerings[fi].finger === null) fi++;
-                    if (fi < ppFingerings.length && ppFingerings[fi].finger) {
-                        n.finger = ppFingerings[fi].finger;
-                        n.reasons = explainFingering(null, n, null, n.finger, null, v.hand, handSize);
+                    if (ppCounters[key] < matching.length) {
+                        n.finger = matching[ppCounters[key]].finger;
                     }
-                    fi++;
+                    ppCounters[key]++;
                 });
                 // Re-generar explicacions amb context
                 const melodic = v.notes.filter(n => n.type === 'note' && !n.chord);
@@ -1340,17 +1353,32 @@ document.getElementById('handSize').addEventListener('change', async () => {
             try {
                 showLoading('Re-calculant digitacio...', 'Mida de ma: ' + hs.toUpperCase());
                 const ppResult = await requestPianoplayerFingering(originalMusicXML, hs);
-                allVoices = parseMusicXML(ppResult.musicxml);
-                const ppFingerings = ppResult.fingerings || [];
+                allVoices = parseMusicXML(originalMusicXML);
+                const ppDoc = new DOMParser().parseFromString(ppResult.musicxml, 'text/xml');
+                const ppNotes = ppDoc.querySelectorAll('note');
+                const ppFingerMap = [];
+                ppNotes.forEach(pn => {
+                    const pitch = pn.querySelector('pitch');
+                    if (!pitch) return;
+                    const fing = pn.querySelector('fingering');
+                    if (!fing) return;
+                    ppFingerMap.push({
+                        voice: pn.querySelector('voice')?.textContent || '1',
+                        staff: pn.querySelector('staff')?.textContent || '1',
+                        finger: parseInt(fing.textContent),
+                    });
+                });
+                const ppCounters2 = {};
                 allVoices.forEach(v => {
-                    let fi = 0;
+                    const key = `${v.staff}-${v.voice}`;
+                    if (!ppCounters2[key]) ppCounters2[key] = 0;
+                    const matching = ppFingerMap.filter(p => p.staff === String(v.staff) && p.voice === String(v.voice));
                     v.notes.forEach(n => {
                         if (n.type !== 'note' || n.chord) return;
-                        while (fi < ppFingerings.length && ppFingerings[fi].finger === null) fi++;
-                        if (fi < ppFingerings.length && ppFingerings[fi].finger) {
-                            n.finger = ppFingerings[fi].finger;
+                        if (ppCounters2[key] < matching.length) {
+                            n.finger = matching[ppCounters2[key]].finger;
                         }
-                        fi++;
+                        ppCounters2[key]++;
                     });
                     const melodic = v.notes.filter(n => n.type === 'note' && !n.chord);
                     melodic.forEach((n, i) => {
