@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digitació - Suggeridor de Digitació Pianística</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0f0c29;
+            --bg2: #1a1a2e;
+            --bg3: #16213e;
+            --surface: rgba(255,255,255,0.04);
+            --surface2: rgba(255,255,255,0.07);
+            --surface3: rgba(255,255,255,0.10);
+            --text: #e8e8e8;
+            --text-muted: #8a8a9a;
+            --text-dim: #5a5a6a;
+            --accent: #ffaa00;
+            --accent2: #ff8c00;
+            --accent-soft: rgba(255,170,0,0.12);
+            --accent-border: rgba(255,170,0,0.25);
+            --finger1: #e8c840;
+            --finger2: #4ecdc4;
+            --finger3: #7b68ee;
+            --finger4: #ff6b8a;
+            --finger5: #45b7d1;
+            --white-key: #f0ece4;
+            --black-key: #2a2a30;
+            --border: rgba(255,255,255,0.06);
+            --radius: 10px;
+            --shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, var(--bg) 0%, var(--bg2) 40%, var(--bg3) 100%);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            text-align: center;
+            padding: 32px 20px 8px;
+        }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 12px;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.82em;
+            transition: color 0.2s;
+        }
+        .back-link:hover { color: var(--accent); }
+
+        header h1 {
+            font-size: 2em;
+            font-weight: 700;
+            background: linear-gradient(90deg, #ffd700, #ffaa00, #ff8c00);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        header p {
+            color: var(--text-muted);
+            font-size: 0.9em;
+            margin-top: 6px;
+        }
+
+        .app-container {
+            max-width: 1100px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 24px;
+            flex: 1;
+        }
+
+        /* Config bar */
+        .config-bar {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            padding: 14px 18px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+        }
+        .config-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .config-group label {
+            font-size: 0.78em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .config-group select, .config-group input[type="number"] {
+            padding: 7px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--surface2);
+            color: var(--text);
+            font-size: 0.85em;
+            font-family: inherit;
+        }
+        .config-group select:focus, .config-group input:focus {
+            outline: none;
+            border-color: var(--accent-border);
+        }
+        .hand-viz {
+            font-size: 1.3em;
+            line-height: 1;
+        }
+        .span-display {
+            font-size: 0.82em;
+            color: var(--accent);
+            font-weight: 600;
+            padding: 4px 10px;
+            background: var(--accent-soft);
+            border-radius: 5px;
+        }
+
+        /* Upload zone */
+        .upload-zone {
+            border: 2px dashed rgba(255,170,0,0.25);
+            border-radius: var(--radius);
+            padding: 48px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: var(--surface);
+            margin-bottom: 24px;
+        }
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: var(--accent);
+            background: var(--accent-soft);
+        }
+        .upload-zone .icon {
+            font-size: 2.5em;
+            margin-bottom: 12px;
+            opacity: 0.6;
+        }
+        .upload-zone h3 {
+            font-size: 1em;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .upload-zone p {
+            font-size: 0.82em;
+            color: var(--text-muted);
+        }
+        .upload-zone input {
+            display: none;
+        }
+
+        /* Results area */
+        .results {
+            display: none;
+        }
+        .results.visible {
+            display: block;
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            margin-bottom: 16px;
+            font-size: 0.85em;
+        }
+        .file-info .name {
+            font-weight: 600;
+            flex: 1;
+        }
+        .file-info .stats {
+            color: var(--text-muted);
+        }
+        .file-info .close-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 1.1em;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .file-info .close-btn:hover {
+            color: var(--text);
+            background: var(--surface2);
+        }
+
+        /* Hand selector tabs */
+        .hand-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .hand-tab {
+            padding: 8px 18px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.82em;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .hand-tab.active {
+            background: var(--accent-soft);
+            border-color: var(--accent-border);
+            color: var(--accent);
+        }
+        .hand-tab:hover:not(.active) {
+            background: var(--surface2);
+            color: var(--text);
+        }
+        .hand-tab .count {
+            margin-left: 4px;
+            font-weight: 400;
+            opacity: 0.7;
+        }
+
+        /* Score display */
+        .score-container {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+        .score-scroll {
+            overflow-x: auto;
+            padding: 24px 20px;
+        }
+        .score-track {
+            display: flex;
+            gap: 3px;
+            min-width: min-content;
+            align-items: flex-end;
+            padding-bottom: 40px;
+            position: relative;
+        }
+
+        /* Note cell */
+        .note-cell {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            transition: transform 0.15s;
+            min-width: 38px;
+            position: relative;
+        }
+        .note-cell:hover {
+            transform: translateY(-2px);
+        }
+        .note-cell.selected {
+            transform: translateY(-3px);
+        }
+
+        .finger-num {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.78em;
+            font-weight: 700;
+            color: #fff;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+            transition: transform 0.15s;
+        }
+        .note-cell.selected .finger-num {
+            transform: scale(1.2);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        }
+        .finger-1 { background: var(--finger1); color: #1a1a00; }
+        .finger-2 { background: var(--finger2); color: #0a2a28; }
+        .finger-3 { background: var(--finger3); }
+        .finger-4 { background: var(--finger4); }
+        .finger-5 { background: var(--finger5); color: #0a2028; }
+
+        .note-box {
+            padding: 6px 8px;
+            border-radius: 6px;
+            font-size: 0.78em;
+            font-weight: 600;
+            text-align: center;
+            min-width: 36px;
+            border: 1px solid transparent;
+            transition: all 0.15s;
+            font-variant-numeric: tabular-nums;
+        }
+        .note-white {
+            background: var(--white-key);
+            color: #2a2520;
+        }
+        .note-black {
+            background: var(--black-key);
+            color: #d0d0d0;
+            border-color: rgba(255,255,255,0.1);
+        }
+        .note-cell.selected .note-box {
+            border-color: var(--accent);
+            box-shadow: 0 0 8px rgba(255,170,0,0.3);
+        }
+
+        .note-duration {
+            font-size: 0.6em;
+            color: var(--text-dim);
+            margin-top: -2px;
+        }
+
+        /* Rest cell */
+        .rest-cell {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            min-width: 24px;
+            opacity: 0.3;
+            padding-bottom: 8px;
+        }
+        .rest-cell span {
+            font-size: 0.7em;
+            color: var(--text-dim);
+        }
+
+        /* Bar line */
+        .bar-line {
+            width: 1px;
+            align-self: stretch;
+            background: rgba(255,255,255,0.1);
+            margin: 0 6px;
+            min-height: 60px;
+        }
+
+        /* Phrase grouping */
+        .phrase-bracket {
+            position: absolute;
+            bottom: 6px;
+            height: 16px;
+            border-left: 2px solid rgba(255,170,0,0.2);
+            border-right: 2px solid rgba(255,170,0,0.2);
+            border-bottom: 2px solid rgba(255,170,0,0.2);
+            border-radius: 0 0 6px 6px;
+        }
+
+        /* Explanation panel */
+        .explanation {
+            margin-top: 16px;
+            padding: 18px 20px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            display: none;
+        }
+        .explanation.visible {
+            display: block;
+        }
+        .explanation-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .explanation-note {
+            font-size: 1.1em;
+            font-weight: 700;
+        }
+        .explanation-finger {
+            font-size: 0.78em;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 12px;
+            color: #fff;
+        }
+        .explanation h4 {
+            font-size: 0.72em;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+        .explanation p {
+            font-size: 0.88em;
+            line-height: 1.6;
+            color: var(--text);
+            margin-bottom: 12px;
+        }
+        .explanation p:last-child { margin-bottom: 0; }
+
+        .rule-tag {
+            display: inline-block;
+            font-size: 0.7em;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: var(--accent-soft);
+            color: var(--accent);
+            font-weight: 600;
+            margin-right: 4px;
+            margin-bottom: 3px;
+        }
+
+        /* Finger legend */
+        .finger-legend {
+            display: flex;
+            gap: 14px;
+            justify-content: center;
+            margin-top: 12px;
+            padding: 10px;
+            flex-wrap: wrap;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.72em;
+            color: var(--text-muted);
+        }
+        .legend-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65em;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        footer {
+            text-align: center;
+            padding: 24px 20px;
+            color: #334;
+            font-size: 0.75em;
+            margin-top: auto;
+        }
+        .footer-version {
+            margin-top: 4px;
+            font-size: 0.9em;
+            color: var(--accent);
+            letter-spacing: 0.5px;
+        }
+
+        /* Sample button */
+        .sample-btn {
+            display: inline-block;
+            margin-top: 12px;
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid var(--accent-border);
+            background: transparent;
+            color: var(--accent);
+            font-size: 0.78em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .sample-btn:hover {
+            background: var(--accent-soft);
+        }
+
+        @media (max-width: 700px) {
+            header { padding: 24px 16px 4px; }
+            header h1 { font-size: 1.6em; }
+            .app-container { padding: 16px; }
+            .config-bar { flex-direction: column; align-items: flex-start; gap: 10px; }
+            .upload-zone { padding: 32px 16px; }
+            .note-cell { min-width: 32px; }
+            .finger-num { width: 22px; height: 22px; font-size: 0.7em; }
+            .note-box { font-size: 0.7em; padding: 4px 5px; min-width: 30px; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <a href="../landing-page/index.html" class="back-link">&#8592; Apps XRoig</a>
+    <h1>Digitacio</h1>
+    <p>Suggeridor de digitacio pianistica basat en regles biomecaniques</p>
+</header>
+
+<div class="app-container">
+
+    <div class="config-bar">
+        <div class="config-group">
+            <label>Ma</label>
+            <span class="hand-viz" id="handViz">&#9995;</span>
+            <select id="handSize">
+                <option value="xxs">XXS (~7 st)</option>
+                <option value="xs">XS (~8 st)</option>
+                <option value="s">S (~9 st)</option>
+                <option value="m" selected>M (~10 st)</option>
+                <option value="l">L (~11 st)</option>
+                <option value="xl">XL (~12 st)</option>
+                <option value="xxl">XXL (~14 st)</option>
+            </select>
+        </div>
+        <div class="config-group">
+            <span class="span-display" id="spanDisplay">Extensio max 1-5: 10 semitons</span>
+        </div>
+    </div>
+
+    <div class="upload-zone" id="uploadZone">
+        <div class="icon">&#119070;</div>
+        <h3>Carrega una partitura MusicXML</h3>
+        <p>Arrossega un fitxer .musicxml o .xml, o fes clic per seleccionar</p>
+        <button class="sample-btn" id="sampleBtn">&#9835; Prova amb un exemple</button>
+        <input type="file" id="fileInput" accept=".musicxml,.xml,.mxl">
+    </div>
+
+    <div class="results" id="results">
+        <div class="file-info" id="fileInfo">
+            <span>&#119070;</span>
+            <span class="name" id="fileName"></span>
+            <span class="stats" id="fileStats"></span>
+            <button class="close-btn" id="closeBtn" title="Tancar">&times;</button>
+        </div>
+
+        <div class="hand-tabs" id="handTabs"></div>
+
+        <div class="score-container">
+            <div class="score-scroll">
+                <div class="score-track" id="scoreTrack"></div>
+            </div>
+            <div class="finger-legend">
+                <div class="legend-item"><span class="legend-dot" style="background:var(--finger1);color:#1a1a00">1</span> Polze</div>
+                <div class="legend-item"><span class="legend-dot" style="background:var(--finger2);color:#0a2a28">2</span> Index</div>
+                <div class="legend-item"><span class="legend-dot" style="background:var(--finger3)">3</span> Mig</div>
+                <div class="legend-item"><span class="legend-dot" style="background:var(--finger4)">4</span> Anular</div>
+                <div class="legend-item"><span class="legend-dot" style="background:var(--finger5);color:#0a2028">5</span> Petit</div>
+            </div>
+        </div>
+
+        <div class="explanation" id="explanation">
+            <div class="explanation-header">
+                <span class="explanation-note" id="explNote"></span>
+                <span class="explanation-finger" id="explFinger"></span>
+            </div>
+            <h4>Per que aquest dit?</h4>
+            <p id="explReason"></p>
+            <div id="explRules"></div>
+        </div>
+    </div>
+</div>
+
+<footer>
+    Digitacio &middot; Apps XRoig &middot; 2026
+    <p class="footer-version">v0.1</p>
+</footer>
+
+<script>
+const HAND_SPANS = {
+    xxs: { max15: 7,  max14: 6,  max13: 5,  max12: 3,  max23: 2, max24: 4, max25: 5, max34: 2, max35: 4, max45: 2 },
+    xs:  { max15: 8,  max14: 7,  max13: 5,  max12: 4,  max23: 3, max24: 4, max25: 6, max34: 2, max35: 4, max45: 2 },
+    s:   { max15: 9,  max14: 7,  max13: 6,  max12: 4,  max23: 3, max24: 5, max25: 6, max34: 3, max35: 5, max45: 3 },
+    m:   { max15: 10, max14: 8,  max13: 6,  max12: 4,  max23: 3, max24: 5, max25: 7, max34: 3, max35: 5, max45: 3 },
+    l:   { max15: 11, max14: 9,  max13: 7,  max12: 5,  max23: 3, max24: 6, max25: 8, max34: 3, max35: 6, max45: 3 },
+    xl:  { max15: 12, max14: 10, max13: 8,  max12: 5,  max23: 4, max24: 6, max25: 8, max34: 4, max35: 6, max45: 4 },
+    xxl: { max15: 14, max14: 11, max13: 9,  max12: 6,  max23: 4, max24: 7, max25: 9, max34: 4, max35: 7, max45: 4 },
+};
+
+const FINGER_NAMES = { 1: 'Polze', 2: 'Index', 3: 'Mig', 4: 'Anular', 5: 'Petit' };
+
+const NOTE_NAMES = ['Do', 'Do#', 'Re', 'Re#', 'Mi', 'Fa', 'Fa#', 'Sol', 'Sol#', 'La', 'La#', 'Si'];
+const STEP_MAP = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+
+function noteToMidi(step, octave, alter = 0) {
+    return 12 * (octave + 1) + STEP_MAP[step] + alter;
+}
+
+function midiToName(midi) {
+    const oct = Math.floor(midi / 12) - 1;
+    return NOTE_NAMES[midi % 12] + oct;
+}
+
+function isBlackKey(midi) {
+    return [1, 3, 6, 8, 10].includes(midi % 12);
+}
+
+function parseMusicXML(xmlStr) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xmlStr, 'text/xml');
+    const parts = doc.querySelectorAll('part');
+    const result = [];
+    const partNames = doc.querySelectorAll('part-list score-part');
+
+    parts.forEach((part, pi) => {
+        const nameEl = partNames[pi]?.querySelector('part-name');
+        const partName = nameEl ? nameEl.textContent.trim() : `Part ${pi + 1}`;
+
+        const voices = {};
+        const measures = part.querySelectorAll('measure');
+
+        measures.forEach((measure, mi) => {
+            const notes = measure.querySelectorAll('note');
+            notes.forEach(note => {
+                const isRest = note.querySelector('rest');
+                const isChordPart = note.querySelector('chord');
+                const voiceEl = note.querySelector('voice');
+                const staffEl = note.querySelector('staff');
+                const voice = voiceEl ? voiceEl.textContent : '1';
+                const staff = staffEl ? parseInt(staffEl.textContent) : 1;
+                const key = `${staff}-${voice}`;
+
+                if (!voices[key]) voices[key] = { staff, voice, notes: [] };
+
+                if (isRest) {
+                    const durEl = note.querySelector('duration');
+                    const typeEl = note.querySelector('type');
+                    voices[key].notes.push({
+                        type: 'rest',
+                        measure: mi + 1,
+                        duration: typeEl ? typeEl.textContent : 'quarter'
+                    });
+                    return;
+                }
+
+                const pitch = note.querySelector('pitch');
+                if (!pitch) return;
+
+                const step = pitch.querySelector('step').textContent;
+                const octave = parseInt(pitch.querySelector('octave').textContent);
+                const alterEl = pitch.querySelector('alter');
+                const alter = alterEl ? parseInt(alterEl.textContent) : 0;
+                const typeEl = note.querySelector('type');
+
+                const midi = noteToMidi(step, octave, alter);
+                const noteData = {
+                    type: 'note',
+                    step, octave, alter, midi,
+                    name: midiToName(midi),
+                    isBlack: isBlackKey(midi),
+                    measure: mi + 1,
+                    duration: typeEl ? typeEl.textContent : 'quarter',
+                    isChord: !!isChordPart
+                };
+
+                if (isChordPart && voices[key].notes.length > 0) {
+                    const last = voices[key].notes[voices[key].notes.length - 1];
+                    if (last.type === 'note' && !last.chord) last.chord = [last.midi];
+                    if (last.chord) {
+                        last.chord.push(midi);
+                        return;
+                    }
+                }
+
+                voices[key].notes.push(noteData);
+            });
+        });
+
+        for (const [key, data] of Object.entries(voices)) {
+            const notesOnly = data.notes.filter(n => n.type === 'note');
+            if (notesOnly.length === 0) continue;
+            const avgMidi = notesOnly.reduce((s, n) => s + n.midi, 0) / notesOnly.length;
+            const hand = data.staff === 1 ? 'right' : data.staff === 2 ? 'left' : (avgMidi >= 60 ? 'right' : 'left');
+            result.push({
+                partName,
+                staff: data.staff,
+                voice: data.voice,
+                hand,
+                label: `${partName} - ${hand === 'right' ? 'Ma dreta' : 'Ma esquerra'} (v${data.voice})`,
+                notes: data.notes
+            });
+        }
+    });
+
+    return result;
+}
+
+function getMaxSpan(f1, f2, handSize) {
+    const spans = HAND_SPANS[handSize];
+    const a = Math.min(f1, f2), b = Math.max(f1, f2);
+    const key = `max${a}${b}`;
+    return spans[key] || 10;
+}
+
+function computeFingering(notes, hand, handSize) {
+    const melodicNotes = notes.filter(n => n.type === 'note' && !n.chord);
+    if (melodicNotes.length === 0) return notes;
+
+    const fingers = [1, 2, 3, 4, 5];
+    const N = melodicNotes.length;
+
+    const cost = new Array(N).fill(null).map(() => new Array(5).fill(Infinity));
+    const prev = new Array(N).fill(null).map(() => new Array(5).fill(-1));
+
+    for (let f = 0; f < 5; f++) {
+        cost[0][f] = startCost(melodicNotes[0], fingers[f], hand);
+    }
+
+    for (let i = 1; i < N; i++) {
+        for (let f = 0; f < 5; f++) {
+            for (let pf = 0; pf < 5; pf++) {
+                if (cost[i - 1][pf] === Infinity) continue;
+                const tc = transitionCost(
+                    melodicNotes[i - 1], fingers[pf],
+                    melodicNotes[i], fingers[f],
+                    hand, handSize
+                );
+                const total = cost[i - 1][pf] + tc;
+                if (total < cost[i][f]) {
+                    cost[i][f] = total;
+                    prev[i][f] = pf;
+                }
+            }
+        }
+    }
+
+    let bestLast = 0;
+    for (let f = 1; f < 5; f++) {
+        if (cost[N - 1][f] < cost[N - 1][bestLast]) bestLast = f;
+    }
+
+    const path = new Array(N);
+    path[N - 1] = bestLast;
+    for (let i = N - 2; i >= 0; i--) {
+        path[i] = prev[i + 1][path[i + 1]];
+    }
+
+    let mi = 0;
+    for (let i = 0; i < notes.length; i++) {
+        if (notes[i].type === 'note' && !notes[i].chord) {
+            notes[i].finger = fingers[path[mi]];
+            notes[i].reasons = explainFingering(
+                mi > 0 ? melodicNotes[mi - 1] : null,
+                melodicNotes[mi],
+                mi < N - 1 ? melodicNotes[mi + 1] : null,
+                fingers[path[mi]],
+                mi > 0 ? fingers[path[mi - 1]] : null,
+                hand, handSize
+            );
+            mi++;
+        }
+    }
+
+    return notes;
+}
+
+function startCost(note, finger, hand) {
+    let c = 0;
+    if (note.isBlack && finger === 1) c += 3;
+    if (finger === 3) c -= 0.5;
+    if (finger === 4 || finger === 5) c += 0.5;
+    return c;
+}
+
+function transitionCost(prev, pf, curr, cf, hand, handSize) {
+    let c = 0;
+    const interval = curr.midi - prev.midi;
+    const absInterval = Math.abs(interval);
+    const ascending = hand === 'right' ? interval > 0 : interval < 0;
+    const descending = !ascending && interval !== 0;
+
+    if (pf === cf && interval !== 0) return 100;
+
+    if (interval === 0 && pf === cf) return 0;
+    if (interval === 0 && pf !== cf) c += 2;
+
+    const maxSpan = getMaxSpan(pf, cf, handSize);
+    if (absInterval > maxSpan) c += 50 + (absInterval - maxSpan) * 10;
+
+    if (pf === 1 && cf > 1 && ascending) {
+        c += 1;
+    } else if (cf === 1 && pf > 1 && descending) {
+        c += 1;
+    }
+
+    if (pf > 1 && cf === 1 && ascending) {
+        c += 2;
+        if (pf >= 4) c += 3;
+    } else if (cf > 1 && pf === 1 && descending) {
+        c += 2;
+        if (cf >= 4) c += 3;
+    }
+
+    if (cf > pf && descending && hand === 'right') c += 4;
+    if (cf < pf && ascending && hand === 'right') c += 4;
+    if (cf > pf && ascending && hand === 'left') c += 4;
+    if (cf < pf && descending && hand === 'left') c += 4;
+
+    if (curr.isBlack && cf === 1) c += 3;
+    if (prev.isBlack && pf === 1) c += 1;
+
+    if (cf === 4) c += 0.5;
+    if (cf === 5 && absInterval < 3) c += 1;
+
+    const fingerDist = Math.abs(cf - pf);
+    if (fingerDist === 1 && absInterval <= 2) c -= 1;
+
+    if (absInterval >= 5 && (cf === 1 || cf === 5)) c -= 0.5;
+    if (absInterval <= 2 && fingerDist <= 2) c -= 0.5;
+
+    return Math.max(0, c);
+}
+
+function explainFingering(prevNote, note, nextNote, finger, prevFinger, hand, handSize) {
+    const reasons = [];
+    const rules = [];
+
+    if (!prevNote) {
+        if (finger === 1) {
+            reasons.push(`Comenca amb el polze per tenir maxima llibertat de moviment.`);
+            rules.push('Inici de frase');
+        } else if (finger === 5) {
+            reasons.push(`Dit ${finger} (${FINGER_NAMES[finger]}) a l'inici per preparar la posicio de la ma.`);
+            rules.push('Posicio inicial');
+        } else {
+            reasons.push(`Dit ${finger} (${FINGER_NAMES[finger]}) permet una bona posicio inicial de la ma.`);
+            rules.push('Posicio inicial');
+        }
+    } else if (prevFinger) {
+        const interval = note.midi - prevNote.midi;
+        const absInterval = Math.abs(interval);
+        const ascending = hand === 'right' ? interval > 0 : interval < 0;
+
+        if (prevFinger === finger) {
+            reasons.push(`Repeticio de la mateixa nota amb el mateix dit.`);
+            rules.push('Repeticio');
+        } else if (finger === 1 && prevFinger > 1 && !ascending) {
+            reasons.push(`Pas del polze per continuar la direccio del passatge. Tecnica fonamental per connectar posicions.`);
+            rules.push('Pas del polze');
+        } else if (prevFinger === 1 && finger > 1 && ascending) {
+            reasons.push(`El dit ${finger} (${FINGER_NAMES[finger]}) passa per sobre del polze. Transicio natural en passatge ${hand === 'right' ? 'ascendent' : 'descendent'}.`);
+            rules.push('Creuament sobre polze');
+        } else if (absInterval <= 2 && Math.abs(finger - prevFinger) === 1) {
+            reasons.push(`Dits adjacents (${prevFinger} -> ${finger}) per interval petit (${absInterval} semito${absInterval === 1 ? '' : 'ns'}). Moviment natural sense canviar la posicio de la ma.`);
+            rules.push('Dits adjacents');
+        } else if (absInterval >= 5) {
+            reasons.push(`Salt de ${absInterval} semitons requereix reposicionar la ma. Dit ${finger} (${FINGER_NAMES[finger]}) permet la millor cobertura del nou registre.`);
+            rules.push('Salt / Reposicio');
+        }
+
+        if (note.isBlack && finger === 1) {
+            reasons.push(`Nota negra amb polze: menys ideal pero necessari pel context.`);
+            rules.push('Polze en negra');
+        }
+
+        if (finger === 4 || finger === 5) {
+            if (absInterval <= 2) {
+                reasons.push(`Dit debil (${FINGER_NAMES[finger]}) pero adequat per l'interval curt.`);
+            }
+        }
+
+        const maxSpan = getMaxSpan(prevFinger, finger, handSize);
+        if (absInterval > maxSpan * 0.8) {
+            reasons.push(`Extensio propera al limit de la ma (${absInterval}/${maxSpan} semitons entre dits ${prevFinger}-${finger}).`);
+            rules.push('Extensio');
+        }
+    }
+
+    if (nextNote) {
+        const nextInterval = nextNote.midi - note.midi;
+        if (Math.abs(nextInterval) >= 5 && (finger === 1 || finger === 5)) {
+            reasons.push(`Prepara el salt que ve a continuacio.`);
+            rules.push('Preparacio');
+        }
+    }
+
+    if (reasons.length === 0) {
+        reasons.push(`Dit ${finger} (${FINGER_NAMES[finger]}) es l'opcio de menor cost biomecanic en aquest context.`);
+        rules.push('Optimitzacio');
+    }
+
+    return { reasons, rules };
+}
+
+const DURATION_SYMBOLS = {
+    'whole': '𝅝',
+    'half': '𝅗𝅥',
+    'quarter': '♩',
+    'eighth': '♪',
+    '16th': '♬',
+    '32nd': '♬',
+};
+
+function renderScore(voiceData) {
+    const track = document.getElementById('scoreTrack');
+    track.innerHTML = '';
+    let currentMeasure = -1;
+
+    voiceData.notes.forEach((note, i) => {
+        if (note.measure !== currentMeasure && currentMeasure !== -1) {
+            const bar = document.createElement('div');
+            bar.className = 'bar-line';
+            track.appendChild(bar);
+        }
+        currentMeasure = note.measure;
+
+        if (note.type === 'rest') {
+            const cell = document.createElement('div');
+            cell.className = 'rest-cell';
+            cell.innerHTML = `<span>&#119100;</span>`;
+            track.appendChild(cell);
+            return;
+        }
+
+        if (note.chord) return;
+
+        const cell = document.createElement('div');
+        cell.className = 'note-cell';
+        cell.dataset.index = i;
+
+        const fingerEl = document.createElement('div');
+        fingerEl.className = `finger-num finger-${note.finger || 1}`;
+        fingerEl.textContent = note.finger || '?';
+
+        const noteBox = document.createElement('div');
+        noteBox.className = `note-box ${note.isBlack ? 'note-black' : 'note-white'}`;
+        noteBox.textContent = note.name;
+
+        const durEl = document.createElement('div');
+        durEl.className = 'note-duration';
+        durEl.textContent = DURATION_SYMBOLS[note.duration] || note.duration;
+
+        cell.appendChild(fingerEl);
+        cell.appendChild(noteBox);
+        cell.appendChild(durEl);
+
+        cell.addEventListener('click', () => showExplanation(note, i));
+
+        track.appendChild(cell);
+    });
+}
+
+function showExplanation(note, index) {
+    document.querySelectorAll('.note-cell.selected').forEach(el => el.classList.remove('selected'));
+    const cells = document.querySelectorAll('.note-cell');
+    cells.forEach(c => { if (c.dataset.index == index) c.classList.add('selected'); });
+
+    const panel = document.getElementById('explanation');
+    panel.classList.add('visible');
+
+    document.getElementById('explNote').textContent = `${note.name}`;
+    const fingerEl = document.getElementById('explFinger');
+    fingerEl.textContent = `Dit ${note.finger} - ${FINGER_NAMES[note.finger]}`;
+    fingerEl.className = `explanation-finger finger-${note.finger}`;
+
+    const reasons = note.reasons?.reasons || [`Dit ${note.finger} assignat.`];
+    const rules = note.reasons?.rules || [];
+
+    document.getElementById('explReason').textContent = reasons.join(' ');
+    document.getElementById('explRules').innerHTML = rules.map(r =>
+        `<span class="rule-tag">${r}</span>`
+    ).join('');
+}
+
+let allVoices = [];
+let currentVoice = 0;
+
+function processFile(xmlStr, fileName) {
+    allVoices = parseMusicXML(xmlStr);
+    if (allVoices.length === 0) {
+        alert('No s\'han trobat notes al fitxer.');
+        return;
+    }
+
+    const handSize = document.getElementById('handSize').value;
+    allVoices.forEach(v => {
+        computeFingering(v.notes, v.hand, handSize);
+    });
+
+    document.getElementById('fileName').textContent = fileName;
+    const totalNotes = allVoices.reduce((s, v) => s + v.notes.filter(n => n.type === 'note').length, 0);
+    document.getElementById('fileStats').textContent = `${totalNotes} notes · ${allVoices.length} veu${allVoices.length > 1 ? 's' : ''}`;
+
+    const tabs = document.getElementById('handTabs');
+    tabs.innerHTML = '';
+    allVoices.forEach((v, i) => {
+        const tab = document.createElement('button');
+        tab.className = `hand-tab${i === 0 ? ' active' : ''}`;
+        const noteCount = v.notes.filter(n => n.type === 'note').length;
+        tab.innerHTML = `${v.hand === 'right' ? '&#9995;' : '&#9754;'} ${v.label} <span class="count">(${noteCount})</span>`;
+        tab.addEventListener('click', () => {
+            tabs.querySelectorAll('.hand-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            currentVoice = i;
+            renderScore(allVoices[i]);
+            document.getElementById('explanation').classList.remove('visible');
+        });
+        tabs.appendChild(tab);
+    });
+
+    document.getElementById('uploadZone').style.display = 'none';
+    document.getElementById('results').classList.add('visible');
+
+    currentVoice = 0;
+    renderScore(allVoices[0]);
+}
+
+// Upload handling
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+
+uploadZone.addEventListener('click', (e) => {
+    if (e.target.id !== 'sampleBtn') fileInput.click();
+});
+uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) readFile(file);
+});
+fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) readFile(fileInput.files[0]);
+});
+
+function readFile(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => processFile(e.target.result, file.name);
+    reader.readAsText(file);
+}
+
+document.getElementById('closeBtn').addEventListener('click', () => {
+    document.getElementById('results').classList.remove('visible');
+    document.getElementById('explanation').classList.remove('visible');
+    document.getElementById('uploadZone').style.display = '';
+    allVoices = [];
+});
+
+document.getElementById('handSize').addEventListener('change', () => {
+    const hs = document.getElementById('handSize').value;
+    const spans = HAND_SPANS[hs];
+    document.getElementById('spanDisplay').textContent = `Extensio max 1-5: ${spans.max15} semitons`;
+    if (allVoices.length > 0) {
+        allVoices.forEach(v => computeFingering(v.notes, v.hand, hs));
+        renderScore(allVoices[currentVoice]);
+        document.getElementById('explanation').classList.remove('visible');
+    }
+});
+
+// Sample MusicXML
+document.getElementById('sampleBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const sample = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1"><part-name>Piano</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>
+    </measure>
+    <measure number="2">
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>
+    </measure>
+    <measure number="3">
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>
+    </measure>
+    <measure number="4">
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>
+    </measure>
+  </part>
+</score-partwise>`;
+    processFile(sample, 'Escala Do Major (exemple)');
+});
+</script>
+
+</body>
+</html>
